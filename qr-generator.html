@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firebase設定 QRコード生成</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --accent: #C85A2E;
+    --accent-bg: #FCF0EB;
+    --green: #3A7D58;
+    --green-bg: #EAF5EF;
+    --red: #AA2828;
+    --red-bg: #FCEAEA;
+    --border: #E4E0D8;
+    --bg: #F2F0EC;
+    --text: #1E1C18;
+    --sub: #6B6760;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 48px;
+  }
+
+  .logo-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  }
+  .logo {
+    width: 36px; height: 36px; background: var(--accent);
+    border-radius: 10px; display: flex; align-items: center;
+    justify-content: center; font-size: 18px;
+  }
+  h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+  .subtitle { font-size: 13px; color: var(--sub); margin-bottom: 28px; text-align: center; }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 520px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 13px; font-weight: 700; color: var(--sub);
+    letter-spacing: .06em; margin-bottom: 12px;
+  }
+
+  .steps {
+    display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;
+  }
+  .step {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; color: var(--text); line-height: 1.6;
+  }
+  .step-n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 2px;
+  }
+
+  textarea {
+    width: 100%; height: 180px;
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    font-size: 12px; font-family: 'Courier New', monospace;
+    color: var(--text); outline: none; resize: vertical;
+    transition: border-color .15s; line-height: 1.6;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--sub); font-family: inherit; }
+
+  .btn {
+    width: 100%; padding: 14px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 12px;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer; margin-top: 12px;
+    font-family: inherit; transition: opacity .1s;
+  }
+  .btn:hover { opacity: .9; }
+  .btn:active { opacity: .8; }
+
+  .error-msg {
+    background: var(--red-bg); border: 1.5px solid var(--red);
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 13px; color: var(--red); font-weight: 500;
+    margin-top: 10px; display: none;
+  }
+
+  /* QR結果 */
+  .result-card {
+    background: #fff; border: 1.5px solid var(--green);
+    border-radius: 16px; padding: 28px 24px;
+    width: 100%; max-width: 520px;
+    text-align: center; display: none;
+    margin-bottom: 16px;
+  }
+  .result-title {
+    font-size: 14px; font-weight: 700; color: var(--green);
+    margin-bottom: 6px;
+  }
+  .result-sub { font-size: 12px; color: var(--sub); margin-bottom: 20px; line-height: 1.6; }
+
+  #qr-container {
+    display: flex; justify-content: center;
+    margin: 0 auto 20px;
+  }
+  #qr-container canvas, #qr-container img {
+    border-radius: 8px;
+  }
+
+  .config-preview {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    font-size: 11px; font-family: monospace;
+    color: var(--sub); text-align: left;
+    max-height: 120px; overflow-y: auto;
+    word-break: break-all; line-height: 1.7;
+    margin-bottom: 16px;
+  }
+
+  .scan-hint {
+    background: var(--green-bg); border: 1px solid rgba(58,125,88,.25);
+    border-radius: 10px; padding: 12px 14px;
+    font-size: 12px; color: var(--green); font-weight: 500;
+    line-height: 1.6; text-align: left;
+  }
+  .scan-hint strong { font-weight: 700; }
+
+  .regenerate-btn {
+    width: 100%; padding: 13px;
+    background: var(--bg); color: var(--text);
+    border: 1.5px solid var(--border); border-radius: 12px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; margin-top: 12px;
+    font-family: inherit;
+  }
+  .regenerate-btn:hover { background: #eee; }
+
+  footer {
+    font-size: 11px; color: var(--sub); text-align: center;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="logo-row">
+  <div class="logo">🎁</div>
+  <h1>Firebase設定 QRコード生成</h1>
+</div>
+<p class="subtitle">期限管理アプリ用 — PCで生成してiPhoneでスキャン</p>
+
+<!-- 入力カード -->
+<div class="card" id="input-card">
+  <div class="card-title">📋 手順</div>
+  <div class="steps">
+    <div class="step"><div class="step-n">1</div><div>Firebaseコンソール → プロジェクト設定 → マイアプリ → <strong>「構成」を選択</strong></div></div>
+    <div class="step" style="background:var(--accent-bg);border-radius:8px;padding:8px 10px;margin-bottom:2px">
+      <div class="step-n" style="background:var(--sub)">💡</div>
+      <div>このページはスマホからも開けます。アプリの ⚙️ → <strong>「QRコードを生成する」</strong> からアクセスできます。</div>
+    </div>
+    <div class="step"><div class="step-n">2</div><div><code>const firebaseConfig = { … }</code> のコードをすべてコピー</div></div>
+    <div class="step"><div class="step-n">3</div><div>下のテキストエリアに貼り付けて「QRコードを生成」をクリック</div></div>
+    <div class="step"><div class="step-n">4</div><div>表示されたQRコードをiPhoneの期限管理アプリでスキャン → 自動設定完了！</div></div>
+  </div>
+
+  <textarea id="config-input"
+    placeholder="const firebaseConfig = {
+  apiKey: &quot;AIzaSy...&quot;,
+  authDomain: &quot;your-app.firebaseapp.com&quot;,
+  databaseURL: &quot;https://your-app-default-rtdb.asia-southeast1.firebasedatabase.app&quot;,
+  projectId: &quot;your-app&quot;,
+  storageBucket: &quot;your-app.appspot.com&quot;,
+  messagingSenderId: &quot;123456789012&quot;,
+  appId: &quot;1:123:web:abc123&quot;
+};"></textarea>
+
+  <div class="error-msg" id="error-msg"></div>
+
+  <button class="btn" onclick="generate()">QRコードを生成 →</button>
+</div>
+
+<!-- 結果カード -->
+<div class="result-card" id="result-card">
+  <div class="result-title">✅ QRコードが生成されました</div>
+  <div class="result-sub">このQRコードをiPhoneのカメラまたは<br>アプリの設定画面からスキャンしてください</div>
+
+  <div id="qr-container"></div>
+
+  <div class="config-preview" id="config-preview"></div>
+
+  <div class="scan-hint">
+    📱 <strong>アプリでのスキャン方法：</strong><br>
+    期限管理アプリ → 右上 <strong>⚙️</strong> → <strong>「QRコードでスキャン」</strong> タップ<br>
+    → カメラにこのQRコードを向けると自動で設定が完了します
+  </div>
+
+  <button class="regenerate-btn" onclick="reset()">← 入力し直す</button>
+  <a href="index.html" style="display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--sub);text-decoration:none">
+    📱 アプリに戻る
+  </a>
+</div>
+
+<footer>このQRコードには Firebase の設定情報が含まれています。<br>URLや画像を外部に公開しないでください。</footer>
+
+<script>
+function parseFirebaseConfig(text) {
+  let s = text.trim()
+    .replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '')
+    .replace(/;\s*$/, '')
+    .trim();
+
+  // JS object keys → JSON keys
+  s = s.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3');
+
+  try {
+    const cfg = JSON.parse(s);
+    if (!cfg.apiKey) throw new Error('"apiKey" が見つかりません');
+    if (!cfg.databaseURL) throw new Error('"databaseURL" が見つかりません。Realtime DatabaseのURLが含まれているか確認してください');
+    return cfg;
+  } catch(e) {
+    throw new Error(e.message.startsWith('"') ? e.message : '形式が正しくありません。Firebaseコンソールからコードをそのままコピーしてください');
+  }
+}
+
+function generate() {
+  const text = document.getElementById('config-input').value.trim();
+  const errEl = document.getElementById('error-msg');
+  errEl.style.display = 'none';
+
+  if (!text) {
+    errEl.textContent = '⚠️ 設定コードを貼り付けてください';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  let cfg;
+  try {
+    cfg = parseFirebaseConfig(text);
+  } catch(e) {
+    errEl.textContent = '⚠️ ' + e.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  // QRコードに埋め込むデータ: "fbcfg:" + JSON
+  const payload = 'fbcfg:' + JSON.stringify(cfg);
+
+  // QRコードを生成
+  const container = document.getElementById('qr-container');
+  container.innerHTML = '';
+
+  try {
+    new QRCode(container, {
+      text: payload,
+      width: 240,
+      height: 240,
+      colorDark: '#1E1C18',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } catch(e) {
+    errEl.textContent = '⚠️ QRコードの生成に失敗しました。設定値が長すぎる可能性があります。';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  // プレビュー表示
+  document.getElementById('config-preview').textContent =
+    Object.entries(cfg).map(([k,v]) => `${k}: "${v}"`).join('\n');
+
+  document.getElementById('input-card').style.display = 'none';
+  document.getElementById('result-card').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function reset() {
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('input-card').style.display = 'block';
+  document.getElementById('qr-container').innerHTML = '';
+}
+
+// Enterキーでも生成
+document.getElementById('config-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generate();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="期限管理">
+<meta name="theme-color" content="#C85A2E">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>期限管理</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F2F0EC;--card:#fff;--text:#1E1C18;--sub:#6B6760;--border:#E4E0D8;
+  --accent:#C85A2E;--accent-bg:#FCF0EB;
+  --green:#3A7D58;--green-bg:#EAF5EF;
+  --yellow:#9A7A18;--yellow-bg:#FBF5E0;
+  --orange:#B84E20;--orange-bg:#FBF0EB;
+  --red:#AA2828;--red-bg:#FCEAEA;
+  --purple:#6A3EA1;--purple-bg:#F3EDFF;
+  --tab-h:64px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+
+/* ── HEADER ── */
+.hdr{height:52px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 14px;flex-shrink:0}
+.hdr-l{display:flex;align-items:center;gap:10px}
+.hdr-logo{width:30px;height:30px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.hdr-title{font-size:15px;font-weight:700}
+.hdr-sub{font-size:9px;color:var(--sub);margin-top:1px}
+.hdr-btns{display:flex;gap:8px}
+.hdr-btn{width:38px;height:38px;border-radius:9px;border:1px solid var(--border);background:none;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hdr-btn:active{background:var(--bg)}
+/* Firebase status dot */
+.fb-dot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0;transition:background .3s}
+.fb-dot.connected{background:var(--green)}
+.fb-dot.error{background:var(--red)}
+
+/* ── SYNC BANNER ── */
+.sync-banner{background:var(--yellow-bg);border-bottom:1px solid rgba(154,122,24,.2);padding:8px 14px;font-size:11px;color:var(--yellow);font-weight:600;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.sync-banner.hidden{display:none}
+
+/* ── SCROLL ── */
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom) + 20px)}
+
+/* ── SUMMARY ── */
+.summary{display:grid;grid-template-columns:repeat(4,1fr);background:var(--card);border-bottom:1px solid var(--border);padding:10px 0 8px}
+.sum-cell{display:flex;flex-direction:column;align-items:center;gap:2px;border-right:1px solid var(--border)}
+.sum-cell:last-child{border-right:none}
+.sum-n{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;line-height:1}
+.sum-l{font-size:9px;color:var(--sub);font-weight:500;text-align:center}
+.sum-cell.s-ok .sum-n{color:var(--green)}
+.sum-cell.s-rm .sum-n{color:var(--purple)}
+.sum-cell.s-ex .sum-n{color:var(--red)}
+
+/* ── ALERTS ── */
+.alerts{padding:10px 12px 0;display:flex;flex-direction:column;gap:7px}
+.alert{border-radius:10px;padding:10px 13px;display:flex;align-items:flex-start;gap:9px;font-size:12px;font-weight:500}
+.alert.danger{background:var(--red-bg);color:var(--red)}
+.alert.removal{background:var(--purple-bg);color:var(--purple)}
+
+/* ── CHIPS ── */
+.chips{display:flex;gap:6px;padding:10px 12px 0;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:6px 13px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:12px;font-weight:500;color:var(--sub);cursor:pointer;white-space:nowrap;font-family:inherit}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+
+/* ── SEARCH ── */
+.search-wrap{padding:10px 12px 0}
+.search-inner{display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:9px 13px}
+.search-inner input{flex:1;background:none;border:none;outline:none;font-size:16px;font-family:inherit;color:var(--text)}
+.search-inner input::placeholder{color:var(--sub);font-size:13px}
+
+/* ── LIST ── */
+.list-hdr{padding:12px 12px 5px;display:flex;align-items:center;justify-content:space-between}
+.list-ttl{font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.06em}
+.list-cnt{font-size:11px;font-family:'DM Mono',monospace;color:var(--sub);background:var(--bg);border:1px solid var(--border);padding:2px 9px;border-radius:20px}
+.plist{padding:0 12px;display:flex;flex-direction:column;gap:8px}
+
+/* ── CARD ── */
+.pcard{background:var(--card);border-radius:13px;border:1px solid var(--border);overflow:hidden;animation:ci .2s ease}
+@keyframes ci{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.cbar{height:3px}
+.cbar.ok{background:var(--green)}.cbar.soon{background:var(--yellow)}.cbar.urgent{background:var(--orange)}.cbar.expired{background:var(--red)}.cbar.removal{background:var(--purple)}
+.cbody{padding:13px 15px 0}
+.ctop{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:9px}
+.cname{font-size:14px;font-weight:600;line-height:1.4;flex:1}
+.pill{flex-shrink:0;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;padding:4px 10px;border-radius:20px;white-space:nowrap}
+.pill.ok{background:var(--green-bg);color:var(--green)}.pill.soon{background:var(--yellow-bg);color:var(--yellow)}.pill.urgent{background:var(--orange-bg);color:var(--orange)}.pill.expired{background:var(--red-bg);color:var(--red)}.pill.removal{background:var(--purple-bg);color:var(--purple)}
+.cmeta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
+.ctag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 8px;border-radius:20px;background:var(--bg);color:var(--sub);border:1px solid var(--border)}
+.cmeta-item{font-size:11px;color:var(--sub)}
+.rm-banner{background:var(--purple-bg);border-radius:8px;padding:7px 11px;margin-bottom:9px;font-size:11px;color:var(--purple);font-weight:600}
+.rm-info{font-size:11px;color:var(--sub);margin-bottom:8px}
+.cmemo{margin-bottom:9px;font-size:12px;color:var(--sub);padding:6px 10px;background:var(--bg);border-radius:8px}
+.cactions{display:flex;border-top:1px solid var(--border)}
+.cact{flex:1;padding:13px;border:none;background:none;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;color:var(--sub)}
+.cact:first-child{border-right:1px solid var(--border)}
+.cact:active{background:var(--bg)}
+.cact.del{color:var(--red)}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:40px 24px;color:var(--sub)}
+.empty-i{font-size:38px;margin-bottom:10px;opacity:.35}
+.empty p{font-size:13px;line-height:1.7}
+
+/* ── FAB ── */
+.fab{position:fixed;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom) + 14px);right:14px;width:50px;height:50px;background:var(--accent);border-radius:14px;border:none;color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 18px rgba(200,90,46,.4);z-index:40;transition:transform .1s}
+.fab:active{transform:scale(.92)}
+
+/* ── BOTTOM TAB ── */
+.btab{height:var(--tab-h);background:var(--card);border-top:1px solid var(--border);display:flex;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom)}
+.titem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:none;font-family:inherit;cursor:pointer;position:relative}
+.tico{font-size:19px}
+.tlbl{font-size:10px;color:var(--sub);font-weight:500}
+.titem.on .tlbl{color:var(--accent);font-weight:700}
+.tdot{position:absolute;top:5px;right:calc(50% - 15px);width:8px;height:8px;border-radius:50%;border:2px solid var(--card)}
+
+/* ── SHEET (共通) ── */
+.sov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s}
+.sov.open{opacity:1;pointer-events:all}
+.sheet{width:100%;background:var(--card);border-radius:20px 20px 0 0;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);max-height:94vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+.sov.open .sheet{transform:translateY(0)}
+.shandle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:11px auto 0;flex-shrink:0}
+.shdr{padding:14px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sttl{font-size:15px;font-weight:700}
+.sclose{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--bg);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--sub)}
+.sbody{padding:18px;overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
+.sftr{padding:11px 18px 8px;border-top:1px solid var(--border);flex-shrink:0}
+.sbtn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:13px;padding:15px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer}
+.sbtn:active{opacity:.85}
+.sbtn.secondary{background:var(--bg);color:var(--text);border:1.5px solid var(--border)}
+
+/* ── FORM ── */
+.fg{margin-bottom:14px}
+.fl{display:block;font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin-bottom:6px}
+.fhint{font-weight:400;font-size:10px;margin-left:5px;opacity:.75}
+.fi,.fta{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:11px;padding:12px 14px;font-size:16px;color:var(--text);font-family:inherit;outline:none;-webkit-appearance:none;transition:border-color .15s}
+.fi:focus,.fta:focus{border-color:var(--accent)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.fta{resize:none;height:68px;font-size:14px;line-height:1.5}
+.fi.mono{font-family:'DM Mono',monospace;font-size:13px}
+.cats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.copt{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 3px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;font-family:inherit}
+.copt.on{border-color:var(--accent);background:var(--accent-bg)}
+.copt .ce{font-size:20px}.copt .cn{font-size:10px;font-weight:600;color:var(--sub)}
+.copt.on .cn{color:var(--accent)}
+.presets{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.pbtn{padding:5px 11px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;font-family:inherit}
+.pbtn:active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.rprev{background:var(--purple-bg);border:1.5px solid rgba(106,62,161,.2);border-radius:11px;padding:11px 13px;margin-top:9px;display:none}
+.rprev.show{display:block}
+.rp-ttl{font-size:10px;font-weight:700;color:var(--purple);letter-spacing:.08em;margin-bottom:5px}
+.rp-date{font-size:17px;font-weight:700;font-family:'DM Mono',monospace;color:var(--purple)}
+.rp-desc{font-size:11px;color:var(--purple);opacity:.8;margin-top:3px;line-height:1.5}
+
+/* ── Firebase 設定シート ── */
+.fb-setup-card{background:var(--accent-bg);border:1.5px solid rgba(200,90,46,.2);border-radius:12px;padding:14px;margin-bottom:16px}
+.fb-setup-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px}
+.fb-setup-desc{font-size:12px;color:var(--sub);line-height:1.6}
+.fb-status-card{border-radius:12px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.fb-status-card.ok{background:var(--green-bg);color:var(--green)}
+.fb-status-card.ng{background:var(--red-bg);color:var(--red)}
+.fb-status-card.pending{background:var(--yellow-bg);color:var(--yellow)}
+
+/* ── QR SCANNER ── */
+.qr-overlay{position:fixed;inset:0;background:#000;z-index:300;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .25s}
+.qr-overlay.open{opacity:1;pointer-events:all}
+.qr-header{height:52px;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0}
+.qr-title{color:#fff;font-size:15px;font-weight:700}
+.qr-close{width:36px;height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.qr-video-wrap{flex:1;position:relative;overflow:hidden}
+.qr-video-wrap video{width:100%;height:100%;object-fit:cover}
+.qr-guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.qr-frame{width:220px;height:220px;border:3px solid var(--accent);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
+.qr-corners::before,.qr-corners::after{content:"";position:absolute;width:30px;height:30px;border-color:var(--accent);border-style:solid}
+.qr-hint{position:absolute;bottom:20px;left:0;right:0;text-align:center;color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.qr-ok-banner{position:absolute;inset:0;background:rgba(58,125,88,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#fff;font-size:16px;font-weight:700}
+.qr-scan-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:var(--green-bg);color:var(--green);border:1.5px solid var(--green);border-radius:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;margin-bottom:10px}
+.qr-scan-btn:active{opacity:.85}
+
+/* ── DELETE CONFIRM ── */
+.cov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.cov.open{opacity:1;pointer-events:all}
+.cbox{background:var(--card);border-radius:17px;width:100%;max-width:300px;overflow:hidden;transform:scale(.92);transition:transform .2s}
+.cov.open .cbox{transform:scale(1)}
+.chead{padding:22px 22px 14px;text-align:center}
+.ci-d{font-size:34px;margin-bottom:10px}
+.ct-d{font-size:15px;font-weight:700;margin-bottom:5px}
+.cn-txt{font-size:12px;color:var(--sub);line-height:1.5}
+.cbtns{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border)}
+.cbtn{padding:15px;border:none;background:none;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+.cbtn:active{background:var(--bg)}
+.cbtn.cc{color:var(--sub);border-right:1px solid var(--border)}
+.cbtn.cd{color:var(--red)}
+
+/* ── SPINNER ── */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-l">
+    <div class="hdr-logo">🎁</div>
+    <div><div class="hdr-title">期限管理</div><div class="hdr-sub">ギフト商品</div></div>
+  </div>
+  <div class="hdr-btns">
+    <div class="fb-dot" id="fb-dot" title="Firebase接続状態"></div>
+    <button class="hdr-btn" id="btn-search">🔍</button>
+    <button class="hdr-btn" id="btn-settings">⚙️</button>
+  </div>
+</header>
+
+<!-- 同期バナー -->
+<div class="sync-banner hidden" id="sync-banner">
+  <div class="spinner"></div>
+  <span id="sync-msg">同期中...</span>
+</div>
+
+<div class="scroll">
+  <div class="summary">
+    <div class="sum-cell"><div class="sum-n" id="s-all">0</div><div class="sum-l">総数</div></div>
+    <div class="sum-cell s-ok"><div class="sum-n" id="s-ok">0</div><div class="sum-l">期限内</div></div>
+    <div class="sum-cell s-rm"><div class="sum-n" id="s-rm">0</div><div class="sum-l">在庫落とし</div></div>
+    <div class="sum-cell s-ex"><div class="sum-n" id="s-ex">0</div><div class="sum-l">期限切れ</div></div>
+  </div>
+  <div class="alerts" id="alerts"></div>
+  <div class="search-wrap" id="search-wrap" style="display:none">
+    <div class="search-inner">
+      <span style="color:var(--sub)">🔍</span>
+      <input type="search" id="q" placeholder="商品名・場所で検索...">
+    </div>
+  </div>
+  <div class="chips" id="chips">
+    <button class="chip on" data-f="all">すべて</button>
+    <button class="chip" data-f="expired">🚨 期限切れ</button>
+    <button class="chip" data-f="removal">🟣 在庫落とし</button>
+    <button class="chip" data-f="soon">⚠️ まもなく</button>
+    <button class="chip" data-f="ok">✅ 期限内</button>
+    <button class="chip" data-f="cat-お菓子">🍬 お菓子</button>
+    <button class="chip" data-f="cat-食品">🍱 食品</button>
+    <button class="chip" data-f="cat-飲料">🍵 飲料</button>
+    <button class="chip" data-f="cat-その他">🎀 その他</button>
+  </div>
+  <div class="list-hdr">
+    <div class="list-ttl">商品一覧</div>
+    <div class="list-cnt" id="lcnt">0件</div>
+  </div>
+  <div class="plist" id="plist"></div>
+</div>
+
+<button class="fab" id="fab">＋</button>
+
+<nav class="btab">
+  <button class="titem on" id="t-all" data-tab="all"><span class="tico">📦</span><span class="tlbl">すべて</span></button>
+  <button class="titem" id="t-alert" data-tab="alert"><span class="tico">🔔</span><span class="tlbl">アラート</span><span class="tdot" id="dot-alert" style="display:none;background:var(--red)"></span></button>
+  <button class="titem" id="t-removal" data-tab="removal"><span class="tico">🟣</span><span class="tlbl">在庫落とし</span><span class="tdot" id="dot-rm" style="display:none;background:var(--purple)"></span></button>
+  <button class="titem" id="t-sort" data-tab="sort"><span class="tico">↕️</span><span class="tlbl" id="sort-lbl">期限順</span></button>
+</nav>
+
+<!-- ADD/EDIT SHEET -->
+<div class="sov" id="sov-edit">
+  <div class="sheet">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="sttl" id="sttl">商品を追加</div><button class="sclose" id="sclose-edit">✕</button></div>
+    <div class="sbody">
+      <input type="hidden" id="eid">
+      <div class="fg"><label class="fl">会社名 *</label><input type="text" class="fi" id="fn" placeholder="例: 株式会社〇〇" autocomplete="off"></div>
+      <div class="fg">
+        <label class="fl">カテゴリ</label>
+        <div class="cats" id="cats">
+          <button class="copt on" data-cat="お菓子"><span class="ce">🍬</span><span class="cn">お菓子</span></button>
+          <button class="copt" data-cat="食品"><span class="ce">🍱</span><span class="cn">食品</span></button>
+          <button class="copt" data-cat="飲料"><span class="ce">🍵</span><span class="cn">飲料</span></button>
+          <button class="copt" data-cat="その他"><span class="ce">🎀</span><span class="cn">その他</span></button>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label class="fl">賞味期限 *</label><input type="date" class="fi" id="fex"></div>
+        <div class="fg"><label class="fl">数量</label><input type="number" class="fi" id="fqty" value="1" min="1"></div>
+      </div>
+      <div class="fg">
+        <label class="fl">基本賞味期限（日数）<span class="fhint">在庫落とし日の算出に使用</span></label>
+        <input type="number" class="fi" id="fsl" placeholder="例: 365" min="1">
+        <div class="presets">
+          <button class="pbtn" data-days="365">1年</button>
+          <button class="pbtn" data-days="360">360日</button>
+          <button class="pbtn" data-days="500">500日</button>
+          <button class="pbtn" data-days="180">半年</button>
+          <button class="pbtn" data-days="90">3ヶ月</button>
+          <button class="pbtn" data-days="30">1ヶ月</button>
+        </div>
+        <div class="rprev" id="rprev">
+          <div class="rp-ttl">🟣 在庫落とし日（1/3ルール）</div>
+          <div class="rp-date" id="rpd">-</div>
+          <div class="rp-desc" id="rpdesc"></div>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">品番</label><input type="text" class="fi" id="floc" placeholder="例: AB-1234" autocomplete="off"></div>
+      <div class="fg"><label class="fl">メモ</label><textarea class="fta" id="fmemo" placeholder="備考など..."></textarea></div>
+    </div>
+    <div class="sftr"><button class="sbtn" id="sbtn">保存する</button></div>
+  </div>
+</div>
+
+<!-- SETTINGS SHEET -->
+<div class="sov" id="sov-settings">
+  <div class="sheet">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="sttl">⚙️ Firebase 設定</div><button class="sclose" id="sclose-settings">✕</button></div>
+    <div class="sbody">
+
+      <!-- 接続状態 -->
+      <div id="fb-status-area"></div>
+
+      <!-- 手順ガイド -->
+      <div class="fb-setup-card">
+        <div class="fb-setup-title">📋 コードをそのままコピペするだけ！</div>
+        <div class="fb-setup-desc">
+          Firebaseコンソール → プロジェクト設定 → 「マイアプリ」→<br>
+          <strong>「構成」を選択 → const firebaseConfig = { … } をすべてコピー</strong><br>
+          → 下のテキストエリアに貼り付けて「接続する」をタップ
+        </div>
+      </div>
+
+      <!-- QRスキャンボタン -->
+      <button class="qr-scan-btn" id="btn-qr-scan">
+        📷　QRコードでスキャン（カメラを使用）
+      </button>
+
+      <!-- QR生成ページへのリンク -->
+      <a id="btn-qr-gen" href="qr-generator.html" target="_blank"
+        style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:var(--purple-bg);color:var(--purple);border:1.5px solid var(--purple);border-radius:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;margin-bottom:10px;text-decoration:none">
+        🖥　QRコードを生成する（このページで）
+      </a>
+
+      <!-- コピペエリア -->
+      <div class="fg">
+        <label class="fl">または設定コードを貼り付け</label>
+        <textarea class="fta mono" id="cfg-paste" rows="8"
+          placeholder="const firebaseConfig = {&#10;  apiKey: &quot;AIzaSy...&quot;,&#10;  authDomain: &quot;your-app.firebaseapp.com&quot;,&#10;  databaseURL: &quot;https://...&quot;,&#10;  projectId: &quot;your-app&quot;,&#10;  storageBucket: &quot;your-app.appspot.com&quot;,&#10;  messagingSenderId: &quot;123456789&quot;,&#10;  appId: &quot;1:123:web:abc&quot;&#10;};"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          style="height:160px;font-size:12px;line-height:1.6"></textarea>
+      </div>
+
+      <!-- パース結果プレビュー -->
+      <div id="cfg-preview" style="display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin-bottom:6px">✅ 読み取り結果</div>
+        <div id="cfg-preview-inner" style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:11px;padding:11px 13px;font-size:11px;font-family:'DM Mono',monospace;color:var(--green);line-height:1.8;word-break:break-all"></div>
+      </div>
+
+      <!-- エラー表示 -->
+      <div id="cfg-error" style="display:none;background:var(--red-bg);border:1.5px solid var(--red);border-radius:11px;padding:10px 13px;font-size:12px;color:var(--red);font-weight:500;margin-top:8px"></div>
+
+      <div style="height:8px"></div>
+    </div>
+    <div class="sftr" style="display:flex;gap:10px">
+      <button class="sbtn secondary" id="btn-cfg-clear" style="flex:1">削除</button>
+      <button class="sbtn" id="btn-cfg-save" style="flex:2">接続する</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR SCANNER OVERLAY -->
+<div class="qr-overlay" id="qr-overlay">
+  <div class="qr-header">
+    <div class="qr-title">📷 QRコードをスキャン</div>
+    <button class="qr-close" id="qr-close">✕</button>
+  </div>
+  <div class="qr-video-wrap">
+    <video id="qr-video" playsinline muted></video>
+    <div class="qr-guide">
+      <div class="qr-frame"></div>
+    </div>
+    <div class="qr-hint">🔲 QRコードを枠内に合わせてください</div>
+    <div class="qr-ok-banner" id="qr-ok-banner"><span style="font-size:48px">✅</span><span>設定を読み取りました！</span></div>
+  </div>
+</div>
+
+<!-- 設定削除 CONFIRM -->
+<div class="cov" id="confirm-cfg-overlay">
+  <div class="cbox">
+    <div class="chead">
+      <div class="ci-d">🔌</div>
+      <div class="ct-d">Firebase設定を削除しますか？</div>
+      <div class="cn-txt">削除するとローカル保存モードに切り替わります。</div>
+    </div>
+    <div class="cbtns">
+      <button class="cbtn cc" id="cfg-clear-cancel">キャンセル</button>
+      <button class="cbtn cd" id="cfg-clear-ok">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM -->
+<div class="cov" id="cov">
+  <div class="cbox">
+    <div class="chead"><div class="ci-d">🗑️</div><div class="ct-d">商品を削除しますか？</div><div class="cn-txt" id="cn-txt"></div></div>
+    <div class="cbtns">
+      <button class="cbtn cc" id="ccancel">キャンセル</button>
+      <button class="cbtn cd" id="cok">削除する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  定数・状態
+// ═══════════════════════════════════════
+const CFG_KEY = 'fb_config_v1';
+const ICONS = {'お菓子':'🍬','食品':'🍱','飲料':'🍵','その他':'🎀'};
+const SORTS = ['期限順','名前順','追加順'];
+
+let products = [];
+let filter = 'all';
+let sortMode = 0;
+let deleteId = null;
+let db = null;          // Firebase Database ref
+let fbConnected = false;
+
+// ═══════════════════════════════════════
+//  日付ユーティリティ
+// ═══════════════════════════════════════
+function dl(exp){const t=new Date();t.setHours(0,0,0,0);const e=new Date(exp);e.setHours(0,0,0,0);return Math.ceil((e-t)/86400000)}
+function remDate(exp,sl){if(!exp||!sl)return null;const d=new Date(exp);d.setDate(d.getDate()-Math.floor(sl/3));return d.toISOString().split('T')[0]}
+function dtr(p){const r=remDate(p.expiry,p.shelfLife);return r?dl(r):null}
+function status(p){const d=dl(p.expiry);if(d<0)return'expired';if(p.shelfLife){const r=dtr(p);if(r!==null&&r<=0)return'removal';if(r!==null&&r<=7)return'urgent'}if(d<=3)return'urgent';if(d<=7)return'soon';return'ok'}
+function fmt(d){if(!d)return'-';const[y,m,dd]=d.split('-');return`${y}/${m}/${dd}`}
+function pillTxt(p){const d=dl(p.expiry);if(d<0)return`${Math.abs(d)}日超過`;if(p.shelfLife){const r=dtr(p);if(r!==null&&r<=0)return`落とし${Math.abs(r)}日超過`;if(r!==null&&r<=7)return`落とし日まで${r}日`}if(d===0)return'今日まで';return`残${d}日`}
+
+// ═══════════════════════════════════════
+//  Firebase 接続
+// ═══════════════════════════════════════
+function loadConfig(){
+  try{return JSON.parse(localStorage.getItem(CFG_KEY));}catch(e){return null;}
+}
+
+function saveConfig(cfg){
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+}
+
+function clearConfig(){
+  localStorage.removeItem(CFG_KEY);
+}
+
+function initFirebase(cfg){
+  try{
+    // 既存アプリ削除
+    if(firebase.apps.length){
+      firebase.apps.forEach(app=>app.delete());
+    }
+    firebase.initializeApp(cfg);
+    db = firebase.database();
+
+    // 接続監視
+    db.ref('.info/connected').on('value', snap=>{
+      fbConnected = snap.val()===true;
+      document.getElementById('fb-dot').className = 'fb-dot ' + (fbConnected?'connected':'');
+    });
+
+    // リアルタイム同期（onValue）
+    showSync('Firebaseから読み込み中...');
+    db.ref('products').on('value', snap=>{
+      const data = snap.val();
+      if(data){
+        // Firebaseはオブジェクト形式で返すので配列に変換
+        products = Object.values(data);
+      } else {
+        products = [];
+      }
+      hideSync();
+      render();
+    }, err=>{
+      hideSync();
+      document.getElementById('fb-dot').className = 'fb-dot error';
+      console.error('Firebase read error:', err);
+    });
+
+    return true;
+  }catch(e){
+    console.error('Firebase init error:', e);
+    document.getElementById('fb-dot').className = 'fb-dot error';
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════
+//  Firebase CRUD
+// ═══════════════════════════════════════
+async function fbSave(product){
+  if(!db){// ローカル保存にフォールバック
+    localSave();return;
+  }
+  try{
+    showSync('保存中...');
+    await db.ref('products/' + product.id).set(product);
+    hideSync();
+  }catch(e){
+    hideSync();
+    alert('保存に失敗しました。接続を確認してください。');
+  }
+}
+
+async function fbDelete(id){
+  if(!db){localSave();return;}
+  try{
+    showSync('削除中...');
+    await db.ref('products/' + id).remove();
+    hideSync();
+  }catch(e){
+    hideSync();
+    alert('削除に失敗しました。');
+  }
+}
+
+// ローカル保存（Firebaseなしのフォールバック）
+function localSave(){
+  try{localStorage.setItem('expiry_v3', JSON.stringify(products));}catch(e){}
+}
+
+function localLoad(){
+  try{
+    const d = localStorage.getItem('expiry_v3');
+    return d ? JSON.parse(d) : null;
+  }catch(e){return null;}
+}
+
+// ═══════════════════════════════════════
+//  同期バナー
+// ═══════════════════════════════════════
+let syncTimer = null;
+function showSync(msg){
+  clearTimeout(syncTimer);
+  document.getElementById('sync-msg').textContent = msg||'同期中...';
+  document.getElementById('sync-banner').classList.remove('hidden');
+}
+function hideSync(){
+  syncTimer = setTimeout(()=>document.getElementById('sync-banner').classList.add('hidden'), 500);
+}
+
+// ═══════════════════════════════════════
+//  フィルター / ソート
+// ═══════════════════════════════════════
+function getList(){
+  const q=(document.getElementById('q').value||'').toLowerCase();
+  let list=[...products];
+  if(q)list=list.filter(p=>p.name.toLowerCase().includes(q)||(p.location||'').toLowerCase().includes(q));
+  if(filter==='expired')list=list.filter(p=>dl(p.expiry)<0);
+  else if(filter==='removal')list=list.filter(p=>{const r=dtr(p);return r!==null&&r<=7});
+  else if(filter==='soon')list=list.filter(p=>['soon','urgent'].includes(status(p)));
+  else if(filter==='ok')list=list.filter(p=>status(p)==='ok');
+  else if(filter.startsWith('cat-'))list=list.filter(p=>p.category===filter.slice(4));
+  if(sortMode===0)list.sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
+  else if(sortMode===1)list.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  else list.sort((a,b)=>b.id-a.id);
+  return list;
+}
+
+// ═══════════════════════════════════════
+//  描画
+// ═══════════════════════════════════════
+function render(){
+  const expired=products.filter(p=>dl(p.expiry)<0).length;
+  const rmN=products.filter(p=>{const r=dtr(p);return r!==null&&r<=0}).length;
+  const okN=products.filter(p=>status(p)==='ok').length;
+  document.getElementById('s-all').textContent=products.length;
+  document.getElementById('s-ok').textContent=okN;
+  document.getElementById('s-rm').textContent=rmN;
+  document.getElementById('s-ex').textContent=expired;
+  document.getElementById('dot-alert').style.display=expired>0?'':'none';
+  document.getElementById('dot-rm').style.display=rmN>0?'':'none';
+
+  let al='';
+  if(expired>0)al+=`<div class="alert danger"><span>🚨</span><div><strong>${expired}件が賞味期限切れ</strong>です。確認・廃棄処理をしてください。</div></div>`;
+  const rmA=products.filter(p=>{const r=dtr(p);return r!==null&&r<=7&&dl(p.expiry)>=0});
+  if(rmA.length>0)al+=`<div class="alert removal"><span>🟣</span><div><strong>${rmA.length}件が在庫落とし日を過ぎているか7日以内</strong>です。在庫から落としてください。</div></div>`;
+  document.getElementById('alerts').innerHTML=al;
+
+  const list=getList();
+  document.getElementById('lcnt').textContent=`${list.length}件`;
+  if(!list.length){
+    document.getElementById('plist').innerHTML=`<div class="empty"><div class="empty-i">📭</div><p>該当する商品がありません<br>右下の ＋ から追加できます</p></div>`;
+    return;
+  }
+  document.getElementById('plist').innerHTML=list.map(p=>{
+    const st=status(p),icon=ICONS[p.category]||'📦';
+    const rd=p.shelfLife?remDate(p.expiry,p.shelfLife):null,dr=rd?dl(rd):null;
+    let rmH='';
+    if(rd){if(dr<=0)rmH=`<div class="rm-banner">🟣 在庫落とし日: ${fmt(rd)}（${Math.abs(dr)}日超過）</div>`;else if(dr<=14)rmH=`<div class="rm-banner">🟣 在庫落とし日: ${fmt(rd)}（あと${dr}日）</div>`;else rmH=`<div class="rm-info">🟣 在庫落とし日: ${fmt(rd)}</div>`}
+    return`<div class="pcard"><div class="cbar ${st}"></div><div class="cbody">
+      <div class="ctop"><div class="cname">${p.name}</div><div class="pill ${st}">${pillTxt(p)}</div></div>
+      <div class="cmeta"><span class="ctag">${icon} ${p.category}</span><span class="cmeta-item">📅 ${fmt(p.expiry)}</span><span class="cmeta-item">📦 ${p.qty}個</span>${p.location?`<span class="cmeta-item">📍 ${p.location}</span>`:''}</div>
+      ${rmH}${p.memo?`<div class="cmemo">💬 ${p.memo}</div>`:''}
+      <div class="cactions"><button class="cact edit-btn" data-id="${p.id}">✏️ 編集</button><button class="cact del del-btn" data-id="${p.id}">🗑 削除</button></div>
+    </div></div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+//  設定シート
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+//  QRコードスキャナー
+// ═══════════════════════════════════════
+let qrStream = null;
+let qrAnimFrame = null;
+
+function openQRScanner() {
+  const overlay = document.getElementById('qr-overlay');
+  const video   = document.getElementById('qr-video');
+  overlay.classList.add('open');
+  document.getElementById('qr-ok-banner').style.display = 'none';
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => {
+      qrStream = stream;
+      video.srcObject = stream;
+      video.play();
+      requestAnimationFrame(scanFrame);
+    })
+    .catch(err => {
+      closeQRScanner();
+      alert('カメラへのアクセスが許可されていません。\nSafari → 設定 → カメラ → 許可 を確認してください。');
+    });
+}
+
+function closeQRScanner() {
+  document.getElementById('qr-overlay').classList.remove('open');
+  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream=null; }
+  if(qrAnimFrame){ cancelAnimationFrame(qrAnimFrame); qrAnimFrame=null; }
+}
+
+function scanFrame() {
+  const video  = document.getElementById('qr-video');
+  if(video.readyState !== video.HAVE_ENOUGH_DATA){ qrAnimFrame=requestAnimationFrame(scanFrame); return; }
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts:'dontInvert' });
+
+  if(code && code.data.startsWith('fbcfg:')){
+    // QR読み取り成功
+    try {
+      const cfg = JSON.parse(code.data.slice(6));
+      onQRSuccess(cfg);
+      return; // scanFrame終了
+    } catch(e) { /* 無効なQR、続行 */ }
+  }
+
+  qrAnimFrame = requestAnimationFrame(scanFrame);
+}
+
+function onQRSuccess(cfg) {
+  // 成功バナー表示
+  const banner = document.getElementById('qr-ok-banner');
+  banner.style.display = 'flex';
+  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream=null; }
+
+  // 少し待ってからシート反映
+  setTimeout(() => {
+    closeQRScanner();
+    // テキストエリアに設定を表示
+    document.getElementById('cfg-paste').value =
+      'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+    showCfgPreview(cfg);
+
+    // 自動で接続
+    saveConfig(cfg);
+    const ok = initFirebase(cfg);
+    if(ok){
+      document.getElementById('sov-settings').classList.remove('open');
+    } else {
+      showCfgError('接続に失敗しました。QRコードの内容を確認してください。');
+    }
+  }, 1200);
+}
+
+document.getElementById('btn-qr-scan').addEventListener('click', openQRScanner);
+document.getElementById('qr-close').addEventListener('click', closeQRScanner);
+
+// ─── Firebase設定コードをパースする ───
+function parseFirebaseConfig(text){
+  // const firebaseConfig = { ... }; 形式
+  // または { ... } だけの形式 どちらも対応
+  const err = (msg) => { throw new Error(msg); };
+
+  let jsonStr = text.trim();
+
+  // 変数宣言を取り除く
+  jsonStr = jsonStr
+    .replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '')  // const xxx =
+    .replace(/;\s*$/, '')                                // 末尾のセミコロン
+    .trim();
+
+  // JavaScriptオブジェクト → JSON に変換
+  // キーのクォートなし (apiKey: "...") → クォートあり ("apiKey": "...")
+  jsonStr = jsonStr.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3');
+
+  let cfg;
+  try {
+    cfg = JSON.parse(jsonStr);
+  } catch(e) {
+    err('形式が正しくありません。Firebaseコンソールからコードをそのままコピーしてください。');
+  }
+
+  const required = ['apiKey','databaseURL'];
+  for(const k of required){
+    if(!cfg[k]) err(`"${k}" が見つかりません。databaseURL が含まれているか確認してください。`);
+  }
+  return cfg;
+}
+
+function showCfgPreview(cfg){
+  const preview = document.getElementById('cfg-preview');
+  const inner   = document.getElementById('cfg-preview-inner');
+  const error   = document.getElementById('cfg-error');
+  error.style.display = 'none';
+  inner.innerHTML = Object.entries(cfg).map(([k,v])=>
+    `<div><span style="opacity:.6">${k}:</span> ${String(v).slice(0,40)}${String(v).length>40?'…':''}</div>`
+  ).join('');
+  preview.style.display = 'block';
+}
+
+function showCfgError(msg){
+  document.getElementById('cfg-preview').style.display = 'none';
+  const el = document.getElementById('cfg-error');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+// テキストエリアに貼り付けたらリアルタイムプレビュー
+document.getElementById('cfg-paste').addEventListener('input', function(){
+  const text = this.value.trim();
+  if(!text){ document.getElementById('cfg-preview').style.display='none'; document.getElementById('cfg-error').style.display='none'; return; }
+  try{
+    const cfg = parseFirebaseConfig(text);
+    showCfgPreview(cfg);
+  } catch(e){
+    // 入力中はエラーを出さない（ある程度入力されたら出す）
+    if(text.includes('}')){
+      showCfgError(e.message);
+    } else {
+      document.getElementById('cfg-preview').style.display='none';
+      document.getElementById('cfg-error').style.display='none';
+    }
+  }
+});
+
+function openSettings(){
+  const cfg = loadConfig()||{};
+
+  // 既存設定があればテキストエリアに表示
+  if(cfg.apiKey){
+    document.getElementById('cfg-paste').value =
+      `const firebaseConfig = ${JSON.stringify(cfg, null, 2)};`;
+    showCfgPreview(cfg);
+  } else {
+    document.getElementById('cfg-paste').value = '';
+    document.getElementById('cfg-preview').style.display = 'none';
+    document.getElementById('cfg-error').style.display   = 'none';
+  }
+
+  // 接続状態表示
+  const area = document.getElementById('fb-status-area');
+  if(!cfg.apiKey){
+    area.innerHTML=`<div class="fb-status-card ng">❌ 未設定 — 下にコードを貼り付けてください</div>`;
+  } else if(fbConnected){
+    area.innerHTML=`<div class="fb-status-card ok">✅ Firebase に接続済みです</div>`;
+  } else {
+    area.innerHTML=`<div class="fb-status-card pending">⏳ 接続を確認中...</div>`;
+  }
+
+  document.getElementById('sov-settings').classList.add('open');
+}
+
+document.getElementById('btn-settings').addEventListener('click', openSettings);
+document.getElementById('sclose-settings').addEventListener('click', ()=>document.getElementById('sov-settings').classList.remove('open'));
+document.getElementById('sov-settings').addEventListener('click', e=>{if(e.target===document.getElementById('sov-settings'))document.getElementById('sov-settings').classList.remove('open')});
+
+document.getElementById('btn-cfg-save').addEventListener('click', ()=>{
+  const text = document.getElementById('cfg-paste').value.trim();
+  if(!text){ showCfgError('設定コードを貼り付けてください'); return; }
+
+  let cfg;
+  try{
+    cfg = parseFirebaseConfig(text);
+  } catch(e){
+    showCfgError(e.message); return;
+  }
+
+  saveConfig(cfg);
+  const ok = initFirebase(cfg);
+  if(ok){
+    document.getElementById('sov-settings').classList.remove('open');
+    document.getElementById('fb-status-area').innerHTML='';
+  } else {
+    showCfgError('接続に失敗しました。設定コードが正しいか確認してください。');
+  }
+});
+
+document.getElementById('btn-cfg-clear').addEventListener('click', ()=>{
+  document.getElementById('confirm-cfg-overlay').classList.add('open');
+});
+
+document.getElementById('cfg-clear-cancel').addEventListener('click', ()=>{
+  document.getElementById('confirm-cfg-overlay').classList.remove('open');
+});
+
+document.getElementById('cfg-clear-ok').addEventListener('click', ()=>{
+  clearConfig();
+  if(firebase.apps.length) firebase.apps.forEach(a=>a.delete().catch(()=>{}));
+  db = null; fbConnected = false;
+  document.getElementById('fb-dot').className = 'fb-dot';
+  const local = localLoad();
+  products = local || [];
+  render();
+  document.getElementById('confirm-cfg-overlay').classList.remove('open');
+  document.getElementById('sov-settings').classList.remove('open');
+});
+
+document.getElementById('confirm-cfg-overlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('confirm-cfg-overlay'))
+    document.getElementById('confirm-cfg-overlay').classList.remove('open');
+});
+
+// ═══════════════════════════════════════
+//  商品 CRUD
+// ═══════════════════════════════════════
+function openSheet(p=null){
+  document.getElementById('sttl').textContent=p?'商品を編集':'商品を追加';
+  document.getElementById('eid').value=p?p.id:'';
+  document.getElementById('fn').value=p?p.name:'';
+  document.getElementById('fex').value=p?p.expiry:'';
+  document.getElementById('fqty').value=p?p.qty:1;
+  document.getElementById('fsl').value=p&&p.shelfLife?p.shelfLife:'';
+  document.getElementById('floc').value=p?p.location||'':'';
+  document.getElementById('fmemo').value=p?p.memo||'':'';
+  document.querySelectorAll('.copt').forEach(el=>el.classList.toggle('on',el.dataset.cat===(p?p.category:'お菓子')));
+  updateRP();
+  document.getElementById('sov-edit').classList.add('open');
+  setTimeout(()=>document.getElementById('fn').focus(),350);
+}
+
+document.getElementById('sclose-edit').addEventListener('click',()=>document.getElementById('sov-edit').classList.remove('open'));
+document.getElementById('sov-edit').addEventListener('click',e=>{if(e.target===document.getElementById('sov-edit'))document.getElementById('sov-edit').classList.remove('open')});
+document.getElementById('cats').addEventListener('click',e=>{const o=e.target.closest('.copt');if(!o)return;document.querySelectorAll('.copt').forEach(c=>c.classList.remove('on'));o.classList.add('on')});
+document.querySelector('.presets').addEventListener('click',e=>{const b=e.target.closest('.pbtn');if(!b)return;document.getElementById('fsl').value=b.dataset.days;updateRP()});
+document.getElementById('fex').addEventListener('change',updateRP);
+document.getElementById('fsl').addEventListener('input',updateRP);
+
+function updateRP(){
+  const exp=document.getElementById('fex').value,sl=parseInt(document.getElementById('fsl').value),prev=document.getElementById('rprev');
+  if(!exp||!sl||sl<1){prev.classList.remove('show');return}
+  const rd=remDate(exp,sl),d=dl(rd),rm=Math.floor(sl/3);
+  document.getElementById('rpd').textContent=fmt(rd);
+  let desc=`基本賞味期限${sl}日 ÷ 3 = ${rm}日前が在庫落とし日`;
+  if(d<0)desc+=` ／ すでに${Math.abs(d)}日超過`;else if(d===0)desc+=' ／ 本日が在庫落とし日';else desc+=` ／ あと${d}日`;
+  document.getElementById('rpdesc').textContent=desc;prev.classList.add('show');
+}
+
+document.getElementById('sbtn').addEventListener('click', async()=>{
+  const name=document.getElementById('fn').value.trim(),expiry=document.getElementById('fex').value;
+  if(!name||!expiry){alert('商品名と賞味期限は必須です');return}
+  const sl=document.getElementById('fsl').value;
+  const data={
+    name,
+    category:document.querySelector('.copt.on')?.dataset.cat||'お菓子',
+    qty:parseInt(document.getElementById('fqty').value)||1,
+    expiry,
+    shelfLife:sl?parseInt(sl):null,
+    location:document.getElementById('floc').value.trim(),
+    memo:document.getElementById('fmemo').value.trim(),
+  };
+  const eid=document.getElementById('eid').value;
+  if(eid){
+    data.id = eid;
+    const i=products.findIndex(p=>p.id==eid);
+    if(i>=0)products[i]={...products[i],...data};
+  } else {
+    data.id = 'p_'+Date.now();
+    products.push(data);
+  }
+  document.getElementById('sov-edit').classList.remove('open');
+  await fbSave(data);
+  if(!db) render(); // Firebaseなしの場合は手動更新
+});
+
+document.getElementById('fab').addEventListener('click',()=>openSheet());
+
+// ─ 商品カード イベント委任
+document.getElementById('plist').addEventListener('click',e=>{
+  const eb=e.target.closest('.edit-btn'),db_=e.target.closest('.del-btn');
+  if(eb){const p=products.find(x=>x.id==eb.dataset.id);if(p)openSheet(p)}
+  if(db_){const p=products.find(x=>x.id==db_.dataset.id);if(p){deleteId=p.id;document.getElementById('cn-txt').textContent=`「${p.name}」を削除します。この操作は取り消せません。`;document.getElementById('cov').classList.add('open')}}
+});
+
+// ─ チップ
+document.getElementById('chips').addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;filter=c.dataset.f;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c));render()});
+
+// ─ タブ
+document.querySelector('.btab').addEventListener('click',e=>{
+  const t=e.target.closest('.titem');if(!t)return;
+  const tab=t.dataset.tab;
+  if(tab==='sort'){sortMode=(sortMode+1)%3;document.getElementById('sort-lbl').textContent=SORTS[sortMode];render();return}
+  document.querySelectorAll('.titem').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  const map={all:'all',alert:'expired',removal:'removal'};
+  if(map[tab]){filter=map[tab];document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.f===filter));}
+  render();
+});
+
+// ─ 検索
+document.getElementById('btn-search').addEventListener('click',()=>{
+  const w=document.getElementById('search-wrap'),open=w.style.display!=='none';
+  w.style.display=open?'none':'block';
+  if(!open)setTimeout(()=>document.getElementById('q').focus(),50);
+  else{document.getElementById('q').value='';render()}
+});
+document.getElementById('q').addEventListener('input',render);
+
+// ─ 削除確認
+document.getElementById('ccancel').addEventListener('click',()=>{document.getElementById('cov').classList.remove('open');deleteId=null});
+document.getElementById('cov').addEventListener('click',e=>{if(e.target===document.getElementById('cov')){document.getElementById('cov').classList.remove('open');deleteId=null}});
+document.getElementById('cok').addEventListener('click',async()=>{
+  if(deleteId!==null){
+    products=products.filter(p=>p.id!==deleteId);
+    document.getElementById('cov').classList.remove('open');
+    const id=deleteId; deleteId=null;
+    await fbDelete(id);
+    if(!db) render();
+  }
+});
+
+// ═══════════════════════════════════════
+//  初期化
+// ═══════════════════════════════════════
+(function init(){
+  const cfg = loadConfig();
+  if(cfg&&cfg.apiKey&&cfg.databaseURL){
+    // Firebase初期化（onValueでデータ読込→render）
+    initFirebase(cfg);
+  } else {
+    // ローカル保存から読み込み
+    const local = localLoad();
+    if(local) products = local;
+    else products = [];
+    render();
+    // 未設定の場合は設定を促す
+    if(!cfg||!cfg.apiKey){
+      setTimeout(()=>{
+        document.getElementById('fb-status-area').innerHTML=`<div class="fb-status-card ng">❌ Firebase未設定 — 設定してデータを保護しましょう</div>`;
+        document.getElementById('sov-settings').classList.add('open');
+      }, 800);
+    }
+  }
+})();
+</script>
+</body>
+</html>
